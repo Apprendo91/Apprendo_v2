@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apprendo — Panel Docente</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #FAFAF8; }
+    .header {
+      background: #0A8F7E; color: white;
+      padding: 16px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-logo { font-size: 20px; font-weight: 600; }
+    .header-sub { font-size: 12px; opacity: .7; }
+    .btn-logout {
+      background: rgba(255,255,255,0.2); color: white;
+      border: none; border-radius: 8px; padding: 8px 16px;
+      font-size: 14px; cursor: pointer; font-family: inherit;
+    }
+    .main { padding: 24px; max-width: 900px; margin: 0 auto; }
+    .greeting { margin-bottom: 24px; }
+    .greeting h1 { font-size: 24px; font-weight: 600; color: #1A1A1A; }
+    .greeting p { color: #888; font-size: 14px; margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card {
+      background: white; border-radius: 12px; border: 1px solid #E5E5E3;
+      padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    .stat-icon { font-size: 24px; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 600; color: #1A1A1A; }
+    .stat-value.green { color: #0A8F7E; }
+    .stat-value.red { color: #C0392B; }
+    .stat-label { font-size: 13px; color: #888; margin-top: 4px; }
+    .card {
+      background: white; border-radius: 12px; border: 1px solid #E5E5E3;
+      padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+      margin-bottom: 16px;
+    }
+    .card h2 { font-size: 16px; font-weight: 600; color: #1A1A1A; margin-bottom: 16px; }
+    .booking-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid #F5F5F3;
+    }
+    .booking-row:last-child { border-bottom: none; }
+    .avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: #E6F5F3; color: #0A8F7E;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600; flex-shrink: 0;
+    }
+    .booking-info { flex: 1; }
+    .booking-name { font-size: 15px; font-weight: 500; color: #1A1A1A; }
+    .booking-time { font-size: 13px; color: #888; margin-top: 2px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.green { background: #22C55E; }
+    .dot.yellow { background: #F59E0B; }
+    .dot.red { background: #EF4444; }
+    .btn-done {
+      background: #E6F5F3; color: #0A8F7E;
+      border: 1px solid #0A8F7E; border-radius: 8px;
+      padding: 6px 12px; font-size: 13px; cursor: pointer;
+      font-family: inherit;
+    }
+    .empty { color: #BBB; font-size: 14px; text-align: center; padding: 20px; }
+    .loading { color: #BBB; font-size: 14px; padding: 20px; }
+    .alert {
+      background: #FEF3E0; border: 1px solid #E8961A;
+      border-radius: 10px; padding: 12px 16px;
+      font-size: 14px; color: #7A4B08; margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div>
+      <div class="header-logo">📚 Apprendo</div>
+      <div class="header-sub">Panel docente</div>
+    </div>
+  </div>
+  <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
+</div>
+
+<div class="main">
+  <div class="greeting">
+    <h1 id="greeting-text">Buenos días, Norma 👋</h1>
+    <p id="today-date"></p>
+  </div>
+
+  <div id="alerts"></div>
+
+  <div class="grid">
+    <div class="stat-card">
+      <div class="stat-icon">📅</div>
+      <div class="stat-value green" id="stat-today">—</div>
+      <div class="stat-label">Clases hoy</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">👩‍🎓</div>
+      <div class="stat-value" id="stat-students">—</div>
+      <div class="stat-label">Alumnos activos</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">💰</div>
+      <div class="stat-value" id="stat-revenue">—</div>
+      <div class="stat-label">Cobrado este mes</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Clases de hoy</h2>
+    <div id="today-list"><div class="loading">Cargando...</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Todos los alumnos</h2>
+    <div id="students-list"><div class="loading">Cargando...</div></div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://ivarjjotugjdsgapcrpt.supabase.co'
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2YXJqam90dWdqZHNnYXBjcnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMDIyODUsImV4cCI6MjA5OTc3ODI4NX0.uK1wOrzJnYIxnTT_Jgirme5kPBa3IRE1frGze2vhuQA'
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+
+  // Auth check
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (!session) return window.location.href = 'index.html'
+    if (session.user.email !== 'normacostag@gmail.com') return window.location.href = 'parent.html'
+    loadDashboard()
+  })
+
+  // Fecha de hoy
+  const today = new Date()
+  const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
+  const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+  document.getElementById('today-date').textContent =
+    `${days[today.getDay()]} ${today.getDate()} de ${months[today.getMonth()]} de ${today.getFullYear()}`
+
+  const hour = today.getHours()
+  document.getElementById('greeting-text').textContent =
+    `${hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches'}, Norma 👋`
+
+  async function loadDashboard() {
+    const todayStr = today.toISOString().split('T')[0]
+
+    // Alumnos activos
+    const { data: students } = await supabase
+      .from('students').select('*').eq('active', true)
+
+    document.getElementById('stat-students').textContent = students?.length ?? 0
+
+    // Renderizar lista de alumnos
+    const studList = document.getElementById('students-list')
+    if (!students?.length) {
+      studList.innerHTML = '<div class="empty">No hay alumnos cargados aún.</div>'
+    } else {
+      studList.innerHTML = students.map(s => `
+        <div class="booking-row">
+          <div class="avatar">${s.full_name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
+          <div class="booking-info">
+            <div class="booking-name">${s.full_name}</div>
+            <div class="booking-time">${s.age ? s.age + ' años' : ''} ${s.grade ? '· ' + s.grade : ''}</div>
+          </div>
+        </div>
+      `).join('')
+    }
+
+    // Clases de hoy
+    const { data: slots } = await supabase
+      .from('slots').select('id').eq('date', todayStr)
+
+    const slotIds = slots?.map(s => s.id) ?? []
+    let todayBookings = []
+
+    if (slotIds.length > 0) {
+      const { data: bookings } = await supabase
+        .from('bookings')
+        .select('*, student:students(full_name), slot:slots(start_time)')
+        .in('slot_id', slotIds)
+        .neq('status', 'cancelled')
+
+      todayBookings = bookings ?? []
+    }
+
+    document.getElementById('stat-today').textContent = todayBookings.length
+
+    const todayList = document.getElementById('today-list')
+    if (!todayBookings.length) {
+      todayList.innerHTML = '<div class="empty">No hay clases programadas para hoy.</div>'
+    } else {
+      todayList.innerHTML = todayBookings.map(b => {
+        const initials = b.student?.full_name?.split(' ').map(n=>n[0]).join('').slice(0,2) ?? '?'
+        const time = b.slot?.start_time?.slice(0,5) ?? '--'
+        const dotClass = b.status === 'completed' ? 'green' : b.status === 'no_show' ? 'red' : 'green'
+        return `
+          <div class="booking-row">
+            <div class="avatar">${initials}</div>
+            <div class="booking-info">
+              <div class="booking-name">${b.student?.full_name ?? 'Alumno'}</div>
+              <div class="booking-time">${time} hs</div>
+            </div>
+            <div class="dot ${dotClass}"></div>
+            ${b.status === 'confirmed' ? `<button class="btn-done" onclick="markDone('${b.id}')">Realizada ✓</button>` : ''}
+          </div>
+        `
+      }).join('')
+    }
+
+    // Cobros del mes
+    const monthStart = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-01`
+    const { data: purchases } = await supabase
+      .from('purchases').select('amount_ars').eq('mp_status', 'approved').gte('paid_at', monthStart)
+
+    const total = purchases?.reduce((s, p) => s + (p.amount_ars ?? 0), 0) ?? 0
+    document.getElementById('stat-revenue').textContent = '$' + total.toLocaleString('es-AR')
+  }
+
+  async function markDone(bookingId) {
+    await supabase.from('bookings').update({ status: 'completed' }).eq('id', bookingId)
+    loadDashboard()
+  }
+
+  async function logout() {
+    await supabase.auth.signOut()
+    window.location.href = 'index.html'
+  }
+</script>
+
+</body>
+</html>
