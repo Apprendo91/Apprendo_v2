@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apprendo — Reservar clases</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #FAFAF8; color: #1A1A1A; }
+    .header { background: #0A8F7E; padding: 16px 20px; }
+    .header-logo { font-size: 20px; font-weight: 600; color: white; }
+    .header-sub { font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 1px; }
+    .container { max-width: 900px; margin: 0 auto; padding: 24px 16px 120px; }
+    .steps { display: flex; gap: 0; margin-bottom: 28px; border-bottom: 1px solid #E5E5E3; }
+    .step { flex: 1; text-align: center; font-size: 13px; color: #AAA; padding-bottom: 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .step.active { color: #0A8F7E; border-color: #0A8F7E; font-weight: 500; }
+    .step.done { color: #0A8F7E; border-color: #0A8F7E; }
+    .section-title { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+    .section-sub { font-size: 14px; color: #888; margin-bottom: 20px; }
+    .price-info { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .price-badge { background: white; border: 1.5px solid #E5E5E3; border-radius: 10px; padding: 10px 16px; font-size: 13px; }
+    .price-badge strong { color: #0A8F7E; font-size: 15px; }
+    .price-badge span { color: #888; }
+    .week-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .week-label { font-size: 15px; font-weight: 500; }
+    .btn-week { background: white; border: 1px solid #DDD; border-radius: 8px; width: 36px; height: 36px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+    .calendar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+    .day-header { text-align: center; font-size: 12px; font-weight: 500; color: #888; margin-bottom: 6px; }
+    .day-header.today-h { color: #0A8F7E; }
+    .day-date { font-size: 18px; font-weight: 600; text-align: center; margin-bottom: 8px; }
+    .day-date.today-d { background: #0A8F7E; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px; }
+    .slot { border: 1.5px solid #E5E5E3; border-radius: 8px; padding: 9px 4px; text-align: center; font-size: 13px; cursor: pointer; margin-bottom: 6px; background: white; transition: all .15s; }
+    .slot:hover { border-color: #0A8F7E; background: #E6F5F3; }
+    .slot.selected { background: #0A8F7E; color: white; border-color: #0A8F7E; }
+    .slot.booked { background: #F5F5F3; color: #CCC; border-color: #EEE; cursor: not-allowed; }
+    .slot.blocked { background: #F5F5F3; color: #DDD; border-color: #EEE; cursor: not-allowed; }
+    .slot.past { background: #F9F9F9; color: #DDD; border-color: #F0F0F0; cursor: not-allowed; }
+    .pricing-panel { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #E5E5E3; padding: 14px 20px; box-shadow: 0 -4px 16px rgba(0,0,0,0.08); display: none; z-index: 100; }
+    .pricing-panel.visible { display: block; }
+    .pricing-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; gap: 16px; }
+    .pricing-info { flex: 1; }
+    .pricing-count { font-size: 13px; color: #888; }
+    .pricing-combo { font-size: 13px; color: #0A8F7E; font-weight: 500; margin-top: 1px; }
+    .pricing-total { font-size: 24px; font-weight: 700; color: #1A1A1A; }
+    .btn-continuar { background: #0A8F7E; color: white; border: none; border-radius: 12px; padding: 14px 28px; font-size: 16px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .btn-continuar:hover { background: #076D60; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    .form-card { background: white; border-radius: 16px; border: 1px solid #E5E5E3; padding: 24px; max-width: 500px; }
+    label { display: block; font-size: 14px; font-weight: 500; color: #444; margin-bottom: 6px; margin-top: 16px; }
+    label:first-child { margin-top: 0; }
+    label .opt { font-weight: 400; color: #AAA; font-size: 12px; }
+    input { width: 100%; border: 1px solid #DDD; border-radius: 10px; padding: 12px 14px; font-size: 15px; font-family: inherit; outline: none; transition: border-color .15s; }
+    input:focus { border-color: #0A8F7E; box-shadow: 0 0 0 3px rgba(10,143,126,0.1); }
+    .summary-box { background: #E6F5F3; border: 1px solid #0A8F7E; border-radius: 12px; padding: 16px; margin-top: 20px; }
+    .summary-title { font-size: 12px; font-weight: 600; color: #0A8F7E; margin-bottom: 10px; text-transform: uppercase; letter-spacing: .04em; }
+    .summary-slots { font-size: 13px; color: #444; line-height: 1.8; margin-bottom: 10px; }
+    .summary-total { display: flex; justify-content: space-between; font-size: 18px; font-weight: 700; color: #1A1A1A; border-top: 1px solid rgba(10,143,126,0.2); padding-top: 10px; }
+    .summary-price-detail { font-size: 13px; color: #666; margin-bottom: 6px; }
+    .btn-back { background: white; border: 1px solid #DDD; border-radius: 10px; padding: 10px 18px; font-size: 14px; cursor: pointer; font-family: inherit; margin-bottom: 20px; }
+    .btn-pagar { width: 100%; background: #0A8F7E; color: white; border: none; border-radius: 12px; padding: 16px; font-size: 17px; font-weight: 600; cursor: pointer; font-family: inherit; margin-top: 16px; }
+    .btn-pagar:hover { background: #076D60; }
+    .btn-pagar:disabled { opacity: .6; cursor: not-allowed; }
+    .error-msg { color: #C0392B; font-size: 14px; margin-top: 10px; display: none; }
+    .policy { background: #F5F5F3; border-radius: 10px; padding: 12px 16px; font-size: 12px; color: #666; line-height: 1.8; margin-top: 16px; }
+    @media (max-width: 580px) {
+      .calendar { grid-template-columns: repeat(3, 1fr); }
+      .pricing-inner { flex-direction: column; gap: 8px; }
+      .btn-continuar { width: 100%; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">📚 Apprendo</div>
+  <div class="header-sub">Norma Costaganna · Clases particulares</div>
+</div>
+
+<!-- SCREEN 1: CALENDARIO -->
+<div class="screen active" id="screen-calendar">
+  <div class="container">
+    <div class="steps">
+      <div class="step active">1. Elegí tus horarios</div>
+      <div class="step">2. Tus datos</div>
+      <div class="step">3. Confirmar</div>
+    </div>
+    <div class="section-title">Elegí tus horarios</div>
+    <div class="section-sub">Reservá por semana. El precio depende de cuántas clases tomás.</div>
+    <div class="price-info">
+      <div class="price-badge"><strong>$16.000</strong> <span>· 1 vez por semana</span></div>
+      <div class="price-badge"><strong>$13.000</strong> <span>· 2 o 3 veces por semana</span></div>
+    </div>
+    <div class="week-nav">
+      <button class="btn-week" onclick="prevWeek()">‹</button>
+      <span class="week-label" id="week-label"></span>
+      <button class="btn-week" onclick="nextWeek()">›</button>
+    </div>
+    <div class="calendar" id="calendar"></div>
+    <div class="policy">
+      <strong>Política de cancelación:</strong> más de 24 hs antes → sin cargo · entre 6 y 24 hs → 50% · menos de 6 hs → sin reembolso
+    </div>
+  </div>
+  <div class="pricing-panel" id="pricing-panel">
+    <div class="pricing-inner">
+      <div class="pricing-info">
+        <div class="pricing-count" id="p-count"></div>
+        <div class="pricing-combo" id="p-combo"></div>
+        <div class="pricing-total" id="p-total"></div>
+      </div>
+      <button class="btn-continuar" onclick="goToForm()">Continuar →</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 2: FORMULARIO -->
+<div class="screen" id="screen-form">
+  <div class="container">
+    <div class="steps">
+      <div class="step done">1. Horarios ✓</div>
+      <div class="step active">2. Tus datos</div>
+      <div class="step">3. Confirmar</div>
+    </div>
+    <button class="btn-back" onclick="goBack()">← Volver al calendario</button>
+    <div class="section-title">Tus datos</div>
+    <div class="section-sub">Para confirmar la reserva necesitamos tus datos de contacto.</div>
+    <div class="form-card">
+      <label>Tu nombre completo</label>
+      <input type="text" id="f-parent" placeholder="Ej: María González" />
+      <label>Nombre del alumno/a</label>
+      <input type="text" id="f-student" placeholder="Ej: Lucas González" />
+      <label>WhatsApp</label>
+      <input type="tel" id="f-phone" placeholder="Ej: 11 1234-5678" />
+      <label>Email <span class="opt">(opcional — para recibir confirmación y recordatorios)</span></label>
+      <input type="email" id="f-email" placeholder="Ej: maria@gmail.com" />
+      <label>Materia y grado/año</label>
+      <input type="text" id="f-subject" placeholder="Ej: Matemática · 3er grado" />
+      <div class="summary-box" id="form-summary"></div>
+      <div class="error-msg" id="form-error"></div>
+      <button class="btn-pagar" id="btn-submit" onclick="submitReservation()">Confirmar reserva →</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 3: PAGO / TRANSFERENCIA -->
+<div class="screen" id="screen-success">
+  <div class="container" style="max-width:540px;">
+    <div class="steps">
+      <div class="step done">1. Horarios ✓</div>
+      <div class="step done">2. Datos ✓</div>
+      <div class="step active">3. Confirmar</div>
+    </div>
+
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:52px;margin-bottom:10px;">🎉</div>
+      <div style="font-size:24px;font-weight:700;color:#0A8F7E;margin-bottom:6px;">¡Reserva registrada!</div>
+      <div style="font-size:15px;color:#666;" id="success-detail"></div>
+    </div>
+
+    <!-- Datos bancarios -->
+    <div style="background:white;border-radius:16px;border:1.5px solid #0A8F7E;padding:22px;margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:600;color:#0A8F7E;text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px;">
+        Datos para la transferencia
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #F0F0EE;">
+          <span style="font-size:14px;color:#888;">Titular</span>
+          <span style="font-size:14px;font-weight:500;">Norma Teresa Costaganna</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #F0F0EE;">
+          <span style="font-size:14px;color:#888;">Alias</span>
+          <span style="font-size:16px;font-weight:700;color:#0A8F7E;cursor:pointer;" onclick="copyText('normacostag.mp',this)">normacostag.mp 📋</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;">
+          <span style="font-size:14px;color:#888;">CVU</span>
+          <span style="font-size:13px;font-weight:500;cursor:pointer;" onclick="copyText('0000003100097107300876',this)">0000003100097107300876 📋</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Total -->
+    <div style="background:white;border-radius:14px;border:1px solid #E5E5E3;padding:16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-size:13px;color:#888;margin-bottom:2px;">Total a transferir</div>
+        <div style="font-size:13px;color:#0A8F7E;" id="success-combo"></div>
+      </div>
+      <div style="font-size:28px;font-weight:700;" id="success-amount"></div>
+    </div>
+
+    <!-- Aviso -->
+    <div style="background:#FEF3E0;border-radius:12px;padding:14px 16px;margin-bottom:14px;font-size:14px;color:#7A4B08;line-height:1.6;">
+      💡 Una vez realizada la transferencia, enviá el comprobante por WhatsApp a Norma para confirmar tu lugar.
+    </div>
+
+    <!-- Botón WhatsApp -->
+    <a id="whatsapp-btn" href="#" target="_blank" style="display:block;text-decoration:none;margin-bottom:10px;">
+      <button style="width:100%;background:#25D366;color:white;border:none;border-radius:14px;padding:16px;font-size:17px;font-weight:700;cursor:pointer;font-family:inherit;">
+        💬 Enviar comprobante por WhatsApp
+      </button>
+    </a>
+
+    <!-- Descargar .ics -->
+    <button id="btn-ics" onclick="downloadICS()" style="width:100%;background:white;color:#0A8F7E;border:1.5px solid #0A8F7E;border-radius:14px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:10px;">
+      📅 Agregar clases a mi calendario (.ics)
+    </button>
+
+    <button onclick="window.location.reload()" style="width:100%;background:white;color:#888;border:1px solid #DDD;border-radius:12px;padding:13px;font-size:14px;cursor:pointer;font-family:inherit;">
+      Hacer otra reserva
+    </button>
+    <div style="text-align:center;margin-top:16px;font-size:13px;color:#AAA;">¿Necesitás cancelar o ver tus clases? → <a href="mis-clases.html" style="color:#0A8F7E;font-weight:500;text-decoration:none;">Gestionar mis clases</a></div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ivarjjotugjdsgapcrpt.supabase.co'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2YXJqam90dWdqZHNnYXBjcnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMDIyODUsImV4cCI6MjA5OTc3ODI4NX0.uK1wOrzJnYIxnTT_Jgirme5kPBa3IRE1frGze2vhuQA'
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+
+const PRICE_1 = 16000
+const PRICE_2_3 = 13000
+const NORMA_WA = '5491128751300'
+
+const SLOTS_BY_DAY = {
+  0: [],
+  1: ['10:00','11:00','18:00','19:00'],
+  2: ['10:00','11:00','18:00','19:00'],
+  3: ['10:00','11:00','18:00','19:00'],
+  4: ['10:00','11:00','18:00','19:00'],
+  5: ['10:00','11:00','18:00','19:00'],
+  6: ['10:00','11:00','12:00']
+}
+
+const DAY_NAMES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
+const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+
+let selectedSlots = []
+let bookedKeys = []
+let blockedKeys = []
+let weekOffset = 0
+let currentICS = ''
+
+function dateStr(d) { return d.toISOString().split('T')[0] }
+function isToday(d) { return dateStr(d) === dateStr(new Date()) }
+function isPast(d, time) { return new Date(dateStr(d) + 'T' + time) <= new Date() }
+
+function getWeekDates() {
+  const today = new Date(); today.setHours(0,0,0,0)
+  const dow = today.getDay()
+  const diff = dow === 0 ? -6 : 1 - dow
+  const monday = new Date(today)
+  monday.setDate(today.getDate() + diff + weekOffset * 7)
+  const days = []
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(monday); d.setDate(monday.getDate() + i); days.push(d)
+  }
+  return days
+}
+
+async function loadOccupied() {
+  const days = getWeekDates()
+  const from = dateStr(days[0]), to = dateStr(days[5])
+
+  const { data: res } = await sb.from('reservations').select('slots').neq('status','cancelled')
+  bookedKeys = []
+  ;(res||[]).forEach(r => { if(Array.isArray(r.slots)) r.slots.forEach(k => bookedKeys.push(k)) })
+
+  const { data: blk } = await sb.from('blocked_slots').select('date,time').gte('date',from).lte('date',to)
+  blockedKeys = (blk||[]).map(b => b.date+'_'+b.time)
+}
+
+async function renderCalendar() {
+  await loadOccupied()
+  const days = getWeekDates()
+  document.getElementById('week-label').textContent =
+    `${days[0].getDate()} ${MONTHS[days[0].getMonth()]} — ${days[5].getDate()} ${MONTHS[days[5].getMonth()]}`
+
+  const cal = document.getElementById('calendar')
+  cal.innerHTML = ''
+
+  days.forEach(day => {
+    const dow = day.getDay()
+    const times = SLOTS_BY_DAY[dow] || []
+    const col = document.createElement('div')
+    const isT = isToday(day)
+    col.innerHTML = `
+      <div class="day-header ${isT?'today-h':''}">${DAY_NAMES[dow]}</div>
+      <div class="${isT?'day-date today-d':'day-date'}">${day.getDate()}</div>
+    `
+    if (!times.length) {
+      col.innerHTML += '<div style="text-align:center;color:#DDD;font-size:12px;margin-top:8px;">—</div>'
+    } else {
+      times.forEach(time => {
+        const key = dateStr(day) + '_' + time
+        const past = isPast(day, time)
+        const booked = bookedKeys.includes(key)
+        const blocked = blockedKeys.includes(key)
+        const sel = selectedSlots.some(s => s.key === key)
+        const div = document.createElement('div')
+        div.className = 'slot' + (past?' past':booked?' booked':blocked?' blocked':sel?' selected':'')
+        div.textContent = time
+        if (!past && !booked && !blocked) div.onclick = () => toggleSlot(key, day, time, dow)
+        else div.title = past?'Horario pasado':booked?'Ocupado':'No disponible'
+        col.appendChild(div)
+      })
+    }
+    cal.appendChild(col)
+  })
+}
+
+function toggleSlot(key, day, time, dow) {
+  const idx = selectedSlots.findIndex(s => s.key === key)
+  if (idx === -1) {
+    if (selectedSlots.length >= 3) { alert('Podés reservar hasta 3 clases por semana.'); return }
+    selectedSlots.push({ key, date: dateStr(day), time, dow })
+  } else {
+    selectedSlots.splice(idx, 1)
+  }
+  renderCalendar()
+  updatePanel()
+}
+
+function getPrice() {
+  const n = selectedSlots.length
+  if (n === 0) return { price: 0, label: '' }
+  const price = n >= 2 ? PRICE_2_3 : PRICE_1
+  return { price: price * n, label: n === 1 ? '1 clase · $16.000 c/u' : `${n} clases · $13.000 c/u` }
+}
+
+function formatARS(n) { return '$' + n.toLocaleString('es-AR') }
+
+function updatePanel() {
+  const panel = document.getElementById('pricing-panel')
+  const n = selectedSlots.length
+  if (n === 0) { panel.classList.remove('visible'); return }
+  panel.classList.add('visible')
+  const { price, label } = getPrice()
+  document.getElementById('p-count').textContent = `${n} clase${n>1?'s':''} seleccionada${n>1?'s':''}`
+  document.getElementById('p-combo').textContent = label
+  document.getElementById('p-total').textContent = formatARS(price)
+}
+
+function formatSlotLabel(key) {
+  const [date, time] = key.split('_')
+  const d = new Date(date + 'T12:00:00')
+  return `${DAY_NAMES[d.getDay()]} ${d.getDate()} de ${MONTHS[d.getMonth()]} · ${time} hs`
+}
+
+function goToForm() {
+  if (!selectedSlots.length) return
+  const { price, label } = getPrice()
+  const slotList = [...selectedSlots].sort((a,b)=>a.key.localeCompare(b.key)).map(s=>formatSlotLabel(s.key)).join('<br>')
+  document.getElementById('form-summary').innerHTML = `
+    <div class="summary-title">Resumen de tu reserva</div>
+    <div class="summary-slots">${slotList}</div>
+    <div class="summary-price-detail">${label}</div>
+    <div class="summary-total"><span>Total semana</span><span>${formatARS(price)}</span></div>
+  `
+  show('screen-form')
+}
+
+function goBack() { show('screen-calendar') }
+
+async function submitReservation() {
+  const parent = document.getElementById('f-parent').value.trim()
+  const student = document.getElementById('f-student').value.trim()
+  const phone = document.getElementById('f-phone').value.trim()
+  const email = document.getElementById('f-email').value.trim()
+  const subject = document.getElementById('f-subject').value.trim()
+  const errEl = document.getElementById('form-error')
+
+  if (!parent || !student || !phone) {
+    errEl.textContent = 'Completá nombre, alumno y WhatsApp para continuar.'
+    errEl.style.display = 'block'; return
+  }
+  errEl.style.display = 'none'
+
+  const btn = document.getElementById('btn-submit')
+  btn.disabled = true; btn.textContent = 'Guardando...'
+
+  const n = selectedSlots.length
+  const { price, label } = getPrice()
+  const keys = selectedSlots.map(s => s.key)
+
+  await sb.from('reservations').insert({
+    parent_name: parent, student_name: student,
+    phone, email: email || null, subject,
+    slots: keys, combo_name: label,
+    price_per_class: n >= 2 ? PRICE_2_3 : PRICE_1,
+    total_amount: price, status: 'pending_payment'
+  })
+
+  // Generar .ics para descarga posterior
+  currentICS = generateICS(student, keys)
+
+  // WhatsApp message
+  const slotLabels = keys.map(formatSlotLabel).join(', ')
+  const waMsg = encodeURIComponent(
+    `Hola Norma! Hice una reserva de clases para ${student}.\n` +
+    `Horarios: ${slotLabels}\n` +
+    `Total: ${formatARS(price)}\n` +
+    `Te adjunto el comprobante de transferencia.`
+  )
+
+  document.getElementById('success-detail').textContent = `${n} clase${n>1?'s':''} para ${student} · ${formatARS(price)}`
+  document.getElementById('success-amount').textContent = formatARS(price)
+  document.getElementById('success-combo').textContent = label
+  document.getElementById('whatsapp-btn').href = `https://wa.me/${NORMA_WA}?text=${waMsg}`
+
+  // Enviar emails de confirmación (no bloqueamos el flujo si falla)
+  fetch('https://ivarjjotugjdsgapcrpt.supabase.co/functions/v1/send-confirmation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2YXJqam90dWdqZHNnYXBjcnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMDIyODUsImV4cCI6MjA5OTc3ODI4NX0.uK1wOrzJnYIxnTT_Jgirme5kPBa3IRE1frGze2vhuQA' },
+    body: JSON.stringify({ parent_name: parent, student_name: student, email: email || null, phone, slots: keys, combo_name: label, total_amount: price })
+  }).catch(() => {}) // silencioso si falla
+
+  show('screen-success')
+}
+
+function generateICS(studentName, slots) {
+  const events = slots.map(key => {
+    const [d, t] = key.split('_')
+    const [h, m] = t.split(':')
+    const ds = d.replace(/-/g,'')
+    const hh = h.padStart(2,'0'), mm = m.padStart(2,'0')
+    const eh = String(parseInt(h)+1).padStart(2,'0')
+    return [
+      'BEGIN:VEVENT',
+      `DTSTART:${ds}T${hh}${mm}00`,
+      `DTEND:${ds}T${eh}${mm}00`,
+      `SUMMARY:Clase Apprendo — ${studentName}`,
+      'DESCRIPTION:Clase con Norma Costaganna (Apprendo)',
+      'BEGIN:VALARM',
+      'TRIGGER:-PT24H',
+      'ACTION:DISPLAY',
+      'DESCRIPTION:Recordatorio: clase mañana con Norma',
+      'END:VALARM',
+      'END:VEVENT'
+    ].join('\r\n')
+  }).join('\r\n')
+
+  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Apprendo//ES','CALSCALE:GREGORIAN', events,'END:VCALENDAR'].join('\r\n')
+}
+
+function downloadICS() {
+  if (!currentICS) return
+  const blob = new Blob([currentICS], { type: 'text/calendar;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = 'clases-apprendo.ics'; a.click()
+  URL.revokeObjectURL(url)
+}
+
+function copyText(text, el) {
+  navigator.clipboard.writeText(text)
+  const orig = el.innerHTML
+  el.innerHTML = el.innerHTML.replace('📋','✅')
+  setTimeout(() => el.innerHTML = orig, 2000)
+}
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'))
+  document.getElementById(id).classList.add('active')
+  window.scrollTo(0, 0)
+}
+
+function prevWeek() { weekOffset--; renderCalendar() }
+function nextWeek() { weekOffset++; renderCalendar() }
+
+// También agregar campo email a la tabla reservations si no existe
+async function ensureEmailColumn() {
+  // No hace falta hacer nada — Supabase acepta campos extra en jsonb
+  // pero sí necesitamos que la columna email exista en la tabla
+}
+
+renderCalendar()
+</script>
+</body>
+</html>
